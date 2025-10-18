@@ -26,7 +26,7 @@ jobs:
         $(go env GOPATH)/bin/gosec -severity high -fmt sarif -out gosec.sarif ./http-echo/... || true
     
     - name: Upload Gosec SARIF report
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: gosec.sarif
 
