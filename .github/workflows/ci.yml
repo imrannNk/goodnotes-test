@@ -19,11 +19,11 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
-
+    
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: './http-echo/...'
+      run: |
+        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        $(go env GOPATH)/bin/gosec ./http-echo/...
 
     - name: Run Nancy SCA Scanner
       run: |
