@@ -8,7 +8,7 @@ on:
 
 
 jobs:
-  Build-Scans-K8s-Test:
+  goodnotes-ci-pipeline:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
