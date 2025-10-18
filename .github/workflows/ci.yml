@@ -163,53 +163,77 @@ jobs:
         
         # Test foo.localhost
         echo "Testing foo.localhost..." > loadtest_output.txt
-        hey -n 1000 -c 50 -t 30 http://foo.localhost >> loadtest_output.txt 2>&1
+        hey -n 1000 -c 50 -t 30 http://foo.localhost >> foo_output.txt 2>&1
         
         echo "\nTesting bar.localhost..." >> loadtest_output.txt
-        hey -n 1000 -c 50 -t 30 http://bar.localhost >> loadtest_output.txt 2>&1
+        hey -n 1000 -c 50 -t 30 http://bar.localhost >> bar_output.txt 2>&1
         
-        cat loadtest_output.txt
-
+        # Output both files for reference (optional)
+        echo "FOO OUTPUT:"
+        cat foo_output.txt
+        echo "BAR OUTPUT:"
+        cat bar_output.txt
+        
         # Parse results
         {
           echo "LOADTEST_RESULTS<<EOF"
-          cat loadtest_output.txt
+          echo "===== foo.localhost ====="
+          cat foo_output.txt
+          echo "===== bar.localhost ====="
+          cat bar_output.txt
           echo "EOF"
         } >> $GITHUB_OUTPUT
     
-    - name: "Testing the output format"
-      run: echo "${{ steps.loadtest.outputs.LOADTEST_RESULTS }}"
-
+    # - name: "Testing the output format"
+    #   run: echo "${{ steps.loadtest.outputs.LOADTEST_RESULTS }}"
+    
     - name: Parse load test metrics
       id: metrics
       run: |
-        # Extract key metrics from hey output
-        AVG_RESPONSE_TIME=$(grep "Average:" loadtest_output.txt | head -1 | awk '{print $2}' || echo "N/A")
-        P90_RESPONSE_TIME=$(grep "90% in" loadtest_output.txt | head -1 | awk '{print $3}' || echo "N/A")
-        P95_RESPONSE_TIME=$(grep "95% in" loadtest_output.txt | head -1 | awk '{print $3}' || echo "N/A")
-        TOTAL_REQUESTS=$(grep "Total:" loadtest_output.txt | head -1 | awk '{print $2}' || echo "0")
-        SUCCESS_RATE=$(grep "Status code distribution:" -A 1 loadtest_output.txt | grep "200" | awk '{print $3}' || echo "0")
-        
-        echo "avg_response_time=$AVG_RESPONSE_TIME" >> $GITHUB_OUTPUT
-        echo "p90_response_time=$P90_RESPONSE_TIME" >> $GITHUB_OUTPUT
-        echo "p95_response_time=$P95_RESPONSE_TIME" >> $GITHUB_OUTPUT
-        echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
-        echo "total_requests=$TOTAL_REQUESTS" >> $GITHUB_OUTPUT
+        # Parse foo.localhost
+        AVG_RESPONSE_TIME_FOO=$(grep "Average:" foo_output.txt | awk '{print $2}' || echo "N/A")
+        P90_RESPONSE_TIME_FOO=$(grep "90% in" foo_output.txt | awk '{print $3}' || echo "N/A")
+        P95_RESPONSE_TIME_FOO=$(grep "95% in" foo_output.txt | awk '{print $3}' || echo "N/A")
+        TOTAL_REQUESTS_FOO=$(grep "Total:" foo_output.txt | awk '{print $2}' || echo "0")
+        SUCCESS_RATE_FOO=$(grep "Status code distribution:" -A 1 foo_output.txt | grep "200" | awk '{print $3}' || echo "0")
+
+        # Parse bar.localhost
+        AVG_RESPONSE_TIME_BAR=$(grep "Average:" bar_output.txt | awk '{print $2}' || echo "N/A")
+        P90_RESPONSE_TIME_BAR=$(grep "90% in" bar_output.txt | awk '{print $3}' || echo "N/A")
+        P95_RESPONSE_TIME_BAR=$(grep "95% in" bar_output.txt | awk '{print $3}' || echo "N/A")
+        TOTAL_REQUESTS_BAR=$(grep "Total:" bar_output.txt | awk '{print $2}' || echo "0")
+        SUCCESS_RATE_BAR=$(grep "Status code distribution:" -A 1 bar_output.txt | grep "200" | awk '{print $3}' || echo "0")
+
+        # Output results
+        echo "avg_response_time_foo=$AVG_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
+        echo "p90_response_time_foo=$P90_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
+        echo "p95_response_time_foo=$P95_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
+        echo "total_requests_foo=$TOTAL_REQUESTS_FOO" >> $GITHUB_OUTPUT
+        echo "success_rate_foo=$SUCCESS_RATE_FOO" >> $GITHUB_OUTPUT
+
+        echo "avg_response_time_bar=$AVG_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
+        echo "p90_response_time_bar=$P90_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
+        echo "p95_response_time_bar=$P95_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
+        echo "total_requests_bar=$TOTAL_REQUESTS_BAR" >> $GITHUB_OUTPUT
+        echo "success_rate_bar=$SUCCESS_RATE_BAR" >> $GITHUB_OUTPUT
 
     - name: Comment PR with results
       uses: actions/github-script@v7
       with:
         script: |
+          const loadtestOutput = `${{ steps.loadtest.outputs.LOADTEST_RESULTS }}`;
+          
           const output = `## 🚀 CI Pipeline Results
 
           ### 📊 Load Test Results
-          | Metric | Value |
-          |--------|-------|
-          | Average Response Time | ${{ steps.metrics.outputs.avg_response_time }} |
-          | P90 Response Time | ${{ steps.metrics.outputs.p90_response_time }} |
-          | P95 Response Time | ${{ steps.metrics.outputs.p95_response_time }} |
-          | Success Rate | ${{ steps.metrics.outputs.success_rate }} |
-          | Total Requests | ${{ steps.metrics.outputs.total_requests }} |
+
+          | Metric                  | foo.localhost | bar.localhost |
+          |------------------------|---------------|---------------|
+          | Average Response Time  | ${{ steps.metrics.outputs.avg_response_time_foo }} | ${{ steps.metrics.outputs.avg_response_time_bar }} |
+          | P90 Response Time      | ${{ steps.metrics.outputs.p90_response_time_foo }} | ${{ steps.metrics.outputs.p90_response_time_bar }} |
+          | P95 Response Time      | ${{ steps.metrics.outputs.p95_response_time_foo }} | ${{ steps.metrics.outputs.p95_response_time_bar }} |
+          | Success Rate           | ${{ steps.metrics.outputs.success_rate_foo }} | ${{ steps.metrics.outputs.success_rate_bar }} |
+          | Total Requests         | ${{ steps.metrics.outputs.total_requests_foo }} | ${{ steps.metrics.outputs.total_requests_bar }} |
 
           ### 🔒 Security Scans
           - ✅ SAST scan completed
@@ -230,7 +254,7 @@ jobs:
           <summary>📋 Full Load Test Output</summary>
 
           \`\`\`
-          ${{ steps.loadtest.outputs.LOADTEST_RESULTS }}
+          ${loadtestOutput}
           \`\`\`
           </details>`;
 
@@ -240,3 +264,4 @@ jobs:
             repo: context.repo.repo,
             body: output
           });
+
