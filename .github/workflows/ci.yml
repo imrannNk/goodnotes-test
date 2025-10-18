@@ -247,10 +247,10 @@ jobs:
           | Metric                  | foo.localhost | bar.localhost |
           |------------------------|---------------|---------------|
           | Average Response Time  | ${{ steps.metrics.outputs.avg_response_time_foo }} | ${{ steps.metrics.outputs.avg_response_time_bar }} |
-          | P90 Response Time      | ${{ steps.metrics.outputs.p90_response_time_foo }} | ${{ steps.metrics.outputs.p90_response_time_bar }} |
-          | P95 Response Time      | ${{ steps.metrics.outputs.p95_response_time_foo }} | ${{ steps.metrics.outputs.p95_response_time_bar }} |
           | Slowest Response Time  | ${{ steps.metrics.outputs.slowest_response_time_foo }} | ${{ steps.metrics.outputs.slowest_response_time_bar }} |
           | Fastest Response Time  | ${{ steps.metrics.outputs.fastest_response_time_foo }} | ${{ steps.metrics.outputs.fastest_response_time_bar }} |
+          | P90 Response Time      | ${{ steps.metrics.outputs.p90_response_time_foo }} | ${{ steps.metrics.outputs.p90_response_time_bar }} |
+          | P95 Response Time      | ${{ steps.metrics.outputs.p95_response_time_foo }} | ${{ steps.metrics.outputs.p95_response_time_bar }} |
           | Success Rate           | ${{ steps.metrics.outputs.success_rate_foo }} | ${{ steps.metrics.outputs.success_rate_bar }} |
           | Total Requests         | ${{ steps.metrics.outputs.total_requests_foo }} | ${{ steps.metrics.outputs.total_requests_bar }} |
 
