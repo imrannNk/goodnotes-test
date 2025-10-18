@@ -26,6 +26,7 @@ jobs:
         $(go env GOPATH)/bin/gosec -severity high -fmt sarif -out gosec.sarif ./http-echo/... || true
     
     - name: Upload Gosec SARIF report
+      if: false  # disable upload for test run, it will require PAT_TOKEN configuration
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: gosec.sarif
