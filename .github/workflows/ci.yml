@@ -25,11 +25,16 @@ jobs:
         go install github.com/securego/gosec/v2/cmd/gosec@v2.15.0
         $(go env GOPATH)/bin/gosec -severity high -fmt sarif -out gosec.sarif ./http-echo/... || true
     
-    - name: Upload Gosec SARIF report
-      if: false  # disable upload for test run, it will require PAT_TOKEN configuration
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: gosec.sarif
+    - name: Display Gosec SARIF report
+      run: |
+        echo "==== Gosec SARIF Report (formatted) ===="
+        jq . gosec.sarif
+
+    - name: Summary of Gosec SARIF results
+      run: |
+        echo "==== Summary of High Severity Issues ===="
+        jq -r '.runs[].results[] | 
+          "🚨 Rule: \(.ruleId)\n📄 File: \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)\n📌 Message: \(.message.text)\n---"' gosec.sarif
 
     - name: Run Nancy SCA Scanner
       run: |
