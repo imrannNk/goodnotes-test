@@ -171,12 +171,14 @@ jobs:
         cat loadtest_output.txt
 
         # Parse results
-        echo "LOADTEST_RESULTS<<EOF" >> $GITHUB_OUTPUT
-        cat loadtest_output.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        {
+          echo "LOADTEST_RESULTS<<EOF"
+          cat loadtest_output.txt
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
     
     - name: "Testing the output format"
-      run: echo "${{ steps.loadtest.outputs.GITHUB_OUTPUT }}"
+      run: echo "${{ steps.loadtest.outputs.LOADTEST_RESULTS }}"
 
     - name: Parse load test metrics
       id: metrics
