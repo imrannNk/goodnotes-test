@@ -64,28 +64,26 @@ jobs:
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'http-echo:test'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+        format: 'table'
         severity: 'HIGH,CRITICAL'
 
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-results.sarif'
+    - name: Display Trivy scan results
+      run: |
+        echo "=== Trivy Image Vulnerability Scan ==="
+        trivy image --severity HIGH,CRITICAL http-echo:test
     
     - name: Run Trivy K8s code scanner
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'config'
         scan-ref: './k8s'
-        format: 'sarif'
-        output: 'trivy-k8s.sarif'
+        format: 'table'
         severity: 'HIGH,CRITICAL'
     
-    - name: Upload Trivy K8s scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-k8s.sarif'
+    - name: Display Trivy K8s scan results
+      run: |
+        echo "=== Trivy Kubernetes Manifests Scan ==="
+        trivy config --severity HIGH,CRITICAL ./k8s
 
   k8s-test:
     runs-on: ubuntu-latest
