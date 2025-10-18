@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-echo
+spec:
+  selector:
+    matchLabels:
+      app: foo-http-echo
+  template:
+    metadata:
+      labels:
+        app: foo-http-echo
+    spec:
+      containers:
+        - name: http-echo
+          env:
+            - name: ECHO_TEXT
+              value: "foo"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-echo
+spec:
+  selector:
+    app: foo-http-echo

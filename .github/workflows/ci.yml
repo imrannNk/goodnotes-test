@@ -1,0 +1,199 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: './http-echo/...'
+
+    - name: Run Nancy SCA Scanner
+      run: |
+        cd http-echo
+        go list -json -deps ./... | docker run --rm -i sonatypecommunity/nancy:latest sleuth
+
+    - name: Kubernetes Security Scan
+      uses: azure/k8s-lint@v1
+      with:
+        manifests: |
+          k8s_app/base/*.yaml
+          k8s_app/overlays/foo/*.yaml
+          k8s_app/overlays/bar/*.yaml
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: security-scan
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build binary
+      run: |
+        cd http-echo
+        GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/linux/amd64/http-echo
+
+    - name: Build Docker image locally
+      run: |
+        cd http-echo
+        docker build -t http-echo:test --build-arg BIN_NAME=http-echo .
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'http-echo:test'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  k8s-test:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Create KinD cluster
+      uses: helm/kind-action@v1.8.0
+      with:
+        config: kind_cluster.yaml
+        cluster_name: test-cluster
+
+    - name: Install NGINX Ingress Controller
+      run: |
+        kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+        kubectl wait --namespace ingress-nginx \
+          --for=condition=ready pod \
+          --selector=app.kubernetes.io/component=controller \
+          --timeout=300s
+
+    - name: Load Docker image to KinD
+      run: |
+        cd http-echo
+        docker build -t http-echo:test --build-arg BIN_NAME=http-echo .
+        kind load docker-image http-echo:test --name test-cluster
+        
+    - name: Update image in manifests
+      run: |
+        cd k8s_app/base
+        sed -i "s|image: http-echo:latest|image: http-echo:test|g" deployment.yaml
+        sed -i "s|imagePullPolicy: IfNotPresent|imagePullPolicy: Never|g" deployment.yaml
+
+    - name: Deploy foo application
+      run: |
+        kubectl apply -k k8s_app/overlays/foo/
+        kubectl wait --for=condition=available --timeout=300s deployment/foo-http-echo
+
+    - name: Deploy bar application
+      run: |
+        kubectl apply -k k8s_app/overlays/bar/
+        kubectl wait --for=condition=available --timeout=300s deployment/bar-http-echo
+
+    - name: Verify deployments
+      run: |
+        kubectl get pods,svc,ingress
+        kubectl describe ingress
+
+    - name: Install hey for load testing
+      run: |
+        wget -O hey https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64
+        chmod +x hey
+        sudo mv hey /usr/local/bin/
+
+    - name: Run load tests
+      id: loadtest
+      run: |
+        # Add hosts to /etc/hosts
+        echo "127.0.0.1 foo.localhost bar.localhost" | sudo tee -a /etc/hosts
+        
+        # Test foo.localhost
+        echo "Testing foo.localhost..." > loadtest_output.txt
+        hey -n 1000 -c 50 -t 30 http://foo.localhost >> loadtest_output.txt 2>&1
+        
+        echo "\nTesting bar.localhost..." >> loadtest_output.txt
+        hey -n 1000 -c 50 -t 30 http://bar.localhost >> loadtest_output.txt 2>&1
+        
+        # Parse results
+        echo "LOADTEST_RESULTS<<EOF" >> $GITHUB_OUTPUT
+        cat loadtest_output.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Parse load test metrics
+      id: metrics
+      run: |
+        # Extract key metrics from hey output
+        AVG_RESPONSE_TIME=$(grep "Average:" loadtest_output.txt | head -1 | awk '{print $2}' || echo "N/A")
+        P90_RESPONSE_TIME=$(grep "90% in" loadtest_output.txt | head -1 | awk '{print $3}' || echo "N/A")
+        P95_RESPONSE_TIME=$(grep "95% in" loadtest_output.txt | head -1 | awk '{print $3}' || echo "N/A")
+        TOTAL_REQUESTS=$(grep "Total:" loadtest_output.txt | head -1 | awk '{print $2}' || echo "0")
+        SUCCESS_RATE=$(grep "Status code distribution:" -A 1 loadtest_output.txt | grep "200" | awk '{print $3}' || echo "0")
+        
+        echo "avg_response_time=$AVG_RESPONSE_TIME" >> $GITHUB_OUTPUT
+        echo "p90_response_time=$P90_RESPONSE_TIME" >> $GITHUB_OUTPUT
+        echo "p95_response_time=$P95_RESPONSE_TIME" >> $GITHUB_OUTPUT
+        echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
+        echo "total_requests=$TOTAL_REQUESTS" >> $GITHUB_OUTPUT
+
+    - name: Comment PR with results
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const output = `## 🚀 CI Pipeline Results
+
+          ### 📊 Load Test Results
+          | Metric | Value |
+          |--------|-------|
+          | Average Response Time | ${{ steps.metrics.outputs.avg_response_time }} |
+          | P90 Response Time | ${{ steps.metrics.outputs.p90_response_time }} |
+          | P95 Response Time | ${{ steps.metrics.outputs.p95_response_time }} |
+          | Success Rate | ${{ steps.metrics.outputs.success_rate }} |
+          | Total Requests | ${{ steps.metrics.outputs.total_requests }} |
+
+          ### 🔒 Security Scans
+          - ✅ SAST scan completed
+          - ✅ SCA scan completed  
+          - ✅ Container vulnerability scan completed
+          - ✅ Kubernetes security scan completed
+
+          ### 🐳 Docker Image
+          - Image: \`http-echo:test\` (local build)
+
+          ### ☸️ Kubernetes Deployment
+          - ✅ KinD cluster created successfully
+          - ✅ NGINX Ingress Controller installed
+          - ✅ foo-http-echo deployed and healthy
+          - ✅ bar-http-echo deployed and healthy
+
+          <details>
+          <summary>📋 Full Load Test Output</summary>
+
+          \`\`\`
+          ${{ steps.loadtest.outputs.LOADTEST_RESULTS }}
+          \`\`\`
+          </details>`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          });

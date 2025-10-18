@@ -1,0 +1,6 @@
+namePrefix: bar-
+resources:
+  - ../../base
+  - ingress.yaml
+patchesStrategicMerge:
+  - patch-env.yaml
