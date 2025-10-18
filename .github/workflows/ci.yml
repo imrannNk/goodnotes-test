@@ -120,6 +120,24 @@ jobs:
         kubectl get pods,svc,ingress
         kubectl describe ingress
     
+    - name: Debug bar-http-echo Deployment & Ingress
+      run: |
+        echo "🔍 Deployments:"
+        kubectl get deployments -o wide
+
+        echo "🔍 Pods:"
+        kubectl get pods -o wide
+
+        echo "🔍 Services:"
+        kubectl get svc -o wide
+
+        echo "🔍 Ingresses:"
+        kubectl describe ingress bar-http-echo
+
+        echo "🔍 Events:"
+        kubectl get events --sort-by=.metadata.creationTimestamp
+
+
     - name: Test Ingress with curl
       run: |
         echo "127.0.0.1 foo.localhost bar.localhost" | sudo tee -a /etc/hosts
