@@ -197,14 +197,16 @@ jobs:
         P90_RESPONSE_TIME_FOO=$(grep "90% in" foo_output.txt | awk '{print $3}' || echo "N/A")
         P95_RESPONSE_TIME_FOO=$(grep "95% in" foo_output.txt | awk '{print $3}' || echo "N/A")
         TOTAL_REQUESTS_FOO=$(grep "Total:" foo_output.txt | awk '{print $2}' || echo "0")
-        SUCCESS_RATE_FOO=$(grep "Status code distribution:" -A 1 foo_output.txt | grep "200" | awk '{print $3}' || echo "0")
+        SUCCESS_COUNT_FOO=$(awk '/Status code distribution:/,/\[/{if ($1 ~ /\[200\]/) print $2}' foo_output.txt)
+        SUCCESS_RATE_FOO=$(awk -v success="$SUCCESS_COUNT_FOO" -v total="1000" 'BEGIN { printf "%.2f%%", (success / total) * 100 }')
 
         # Parse bar.localhost
         AVG_RESPONSE_TIME_BAR=$(grep "Average:" bar_output.txt | awk '{print $2}' || echo "N/A")
         P90_RESPONSE_TIME_BAR=$(grep "90% in" bar_output.txt | awk '{print $3}' || echo "N/A")
         P95_RESPONSE_TIME_BAR=$(grep "95% in" bar_output.txt | awk '{print $3}' || echo "N/A")
         TOTAL_REQUESTS_BAR=$(grep "Total:" bar_output.txt | awk '{print $2}' || echo "0")
-        SUCCESS_RATE_BAR=$(grep "Status code distribution:" -A 1 bar_output.txt | grep "200" | awk '{print $3}' || echo "0")
+        SUCCESS_COUNT_BAR=$(awk '/Status code distribution:/,/\[/{if ($1 ~ /\[200\]/) print $2}' bar_output.txt)
+        SUCCESS_RATE_BAR=$(awk -v success="$SUCCESS_COUNT_BAR" -v total="1000" 'BEGIN { printf "%.2f%%", (success / total) * 100 }')
 
         # Output results
         echo "avg_response_time_foo=$AVG_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
