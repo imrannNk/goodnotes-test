@@ -97,7 +97,7 @@ jobs:
         config: kind_cluster.yaml
         cluster_name: test-cluster
 
-    - name: Install NGINX Ingress Controller
+    - name: Install NGINX Ingress Controller in KinD cluster
       run: |
         kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
         kubectl wait --namespace ingress-nginx \
@@ -117,12 +117,12 @@ jobs:
         sed -i "s|image: http-echo:latest|image: http-echo:test|g" deployment.yaml
         sed -i "s|imagePullPolicy: IfNotPresent|imagePullPolicy: Never|g" deployment.yaml
 
-    - name: Deploy foo application
+    - name: Deploy FOO application
       run: |
         kubectl apply -k k8s/overlays/foo/
         kubectl wait --for=condition=available --timeout=300s deployment/foo-http-echo
 
-    - name: Deploy bar application
+    - name: Deploy BAR application
       run: |
         kubectl apply -k k8s/overlays/bar/
         kubectl wait --for=condition=available --timeout=300s deployment/bar-http-echo
@@ -155,6 +155,9 @@ jobs:
         echo "LOADTEST_RESULTS<<EOF" >> $GITHUB_OUTPUT
         cat loadtest_output.txt >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: "Testing the output format"
+      run: echo "${{ steps.loadtest.outputs.GITHUB_OUTPUT }}"
 
     - name: Parse load test metrics
       id: metrics
