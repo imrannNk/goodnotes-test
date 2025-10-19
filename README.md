@@ -238,4 +238,5 @@ on:
 - Implement horizontal pod autoscaling (HPA)
 - Fix identified CVEs from security scans (SCA, SAST, Container and K8s scans)
 - Push container images to a registry in CI
+- Add feature to upload SARIF file to GH Security
 - Add contribution guide
