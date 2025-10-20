@@ -1,0 +1,44 @@
+# Go binaries
+http-echo/http-echo
+http-echo/dist/
+
+# Load testing output files
+*_output.txt
+loadtest_output.txt
+foo_output.txt
+bar_output.txt
+results.json
+
+# Security scan results
+*.sarif
+gosec.sarif
+trivy-results.sarif
+
+# Temporary files from CI/CD
+loadtest.js
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker build context (if any temp files)
+.dockerignore.tmp
+
+# Kubernetes temporary files
+*.yaml.tmp
+*.yml.tmp
+
+# Hey load testing tool (if downloaded locally)
+hey

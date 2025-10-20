@@ -3,12 +3,14 @@ name: CI Pipeline
 on:
   pull_request:
     branches: [ main, master ]
-  push:
-    branches: [ main, master ]
+
+permissions:
+  pull-requests: write
+  issues: write
 
 
 jobs:
-  Build-Scans-K8s-Test:
+  goodnotes-ci-pipeline:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -132,22 +134,34 @@ jobs:
         kubectl get svc -o wide
 
         echo "🔍 Ingresses:"
+        kubectl get ingress
         kubectl describe ingress bar-http-echo
+        kubectl describe ingress foo-http-echo
 
         echo "🔍 Events:"
         kubectl get events --sort-by=.metadata.creationTimestamp
-
 
     - name: Test Ingress with curl
       run: |
         echo "127.0.0.1 foo.localhost bar.localhost" | sudo tee -a /etc/hosts
 
-        echo "🔍 Curling foo.localhost..."
-        curl -v http://foo.localhost
+        for host in foo.localhost bar.localhost; do
+          echo "⏳ Waiting for $host to become reachable..."
 
-        echo "🔍 Curling bar.localhost..."
-        curl -v http://bar.localhost
+          for i in {1..50}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://$host || true)
+            echo "Attempt $i: HTTP $status"
+            if [[ "$status" == "200" ]]; then
+              echo "$host is reachable."
+              break
+            fi
+            sleep 6
+          done
 
+          # Final attempt to output full response for debugging
+          echo "📦 Curling $host..."
+          curl -v http://$host || echo "Failed to reach $host"
+        done
 
     - name: Install hey for load testing
       run: |
@@ -194,15 +208,26 @@ jobs:
         AVG_RESPONSE_TIME_FOO=$(grep "Average:" foo_output.txt | awk '{print $2}' || echo "N/A")
         P90_RESPONSE_TIME_FOO=$(grep "90% in" foo_output.txt | awk '{print $3}' || echo "N/A")
         P95_RESPONSE_TIME_FOO=$(grep "95% in" foo_output.txt | awk '{print $3}' || echo "N/A")
-        TOTAL_REQUESTS_FOO=$(grep "Total:" foo_output.txt | awk '{print $2}' || echo "0")
-        SUCCESS_RATE_FOO=$(grep "Status code distribution:" -A 1 foo_output.txt | grep "200" | awk '{print $3}' || echo "0")
+        #TOTAL_REQUESTS_FOO=$(grep "Total:" foo_output.txt | awk '{print $2}' || echo "0")
+        TOTAL_REQUESTS_FOO=$(awk '/Status code distribution:/,/\[/{if ($1 ~ /^\[[0-9]+\]/) sum += $2} END {print sum}' foo_output.txt)
+        SUCCESS_COUNT_FOO=$(awk '/Status code distribution:/,/\[/{if ($1 ~ /\[200\]/) print $2}' foo_output.txt)
+        #SUCCESS_RATE_FOO=$(awk -v success="$SUCCESS_COUNT_FOO" -v total="1000" 'BEGIN { printf "%.2f%%", (success / total) * 100 }')
+        SUCCESS_RATE_FOO=$(awk -v success="$SUCCESS_COUNT_FOO" -v total="$TOTAL_REQUESTS_FOO" 'BEGIN { printf "%.2f%%", (success / total) * 100 }')
+        FASTEST_RESPONSE_TIME_FOO=$(grep "Fastest:" foo_output.txt | awk '{print $2}' || echo "N/A")
+        SLOWEST_RESPONSE_TIME_FOO=$(grep "Slowest:" foo_output.txt | awk '{print $2}' || echo "N/A")
+
 
         # Parse bar.localhost
         AVG_RESPONSE_TIME_BAR=$(grep "Average:" bar_output.txt | awk '{print $2}' || echo "N/A")
         P90_RESPONSE_TIME_BAR=$(grep "90% in" bar_output.txt | awk '{print $3}' || echo "N/A")
         P95_RESPONSE_TIME_BAR=$(grep "95% in" bar_output.txt | awk '{print $3}' || echo "N/A")
-        TOTAL_REQUESTS_BAR=$(grep "Total:" bar_output.txt | awk '{print $2}' || echo "0")
-        SUCCESS_RATE_BAR=$(grep "Status code distribution:" -A 1 bar_output.txt | grep "200" | awk '{print $3}' || echo "0")
+        #TOTAL_REQUESTS_BAR=$(grep "Total:" bar_output.txt | awk '{print $2}' || echo "0")
+        TOTAL_REQUESTS_BAR=$(awk '/Status code distribution:/,/\[/{if ($1 ~ /^\[[0-9]+\]/) sum += $2} END {print sum}' bar_output.txt)
+        SUCCESS_COUNT_BAR=$(awk '/Status code distribution:/,/\[/{if ($1 ~ /\[200\]/) print $2}' bar_output.txt)
+        #SUCCESS_RATE_BAR=$(awk -v success="$SUCCESS_COUNT_BAR" -v total="1000" 'BEGIN { printf "%.2f%%", (success / total) * 100 }')
+        SUCCESS_RATE_BAR=$(awk -v success="$SUCCESS_COUNT_BAR" -v total="$TOTAL_REQUESTS_BAR" 'BEGIN { printf "%.2f%%", (success / total) * 100 }')
+        FASTEST_RESPONSE_TIME_BAR=$(grep "Fastest:" bar_output.txt | awk '{print $2}' || echo "N/A")
+        SLOWEST_RESPONSE_TIME_BAR=$(grep "Slowest:" bar_output.txt | awk '{print $2}' || echo "N/A")
 
         # Output results
         echo "avg_response_time_foo=$AVG_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
@@ -210,12 +235,16 @@ jobs:
         echo "p95_response_time_foo=$P95_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
         echo "total_requests_foo=$TOTAL_REQUESTS_FOO" >> $GITHUB_OUTPUT
         echo "success_rate_foo=$SUCCESS_RATE_FOO" >> $GITHUB_OUTPUT
+        echo "fastest_response_time_foo=$FASTEST_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
+        echo "slowest_response_time_foo=$SLOWEST_RESPONSE_TIME_FOO" >> $GITHUB_OUTPUT
 
         echo "avg_response_time_bar=$AVG_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
         echo "p90_response_time_bar=$P90_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
         echo "p95_response_time_bar=$P95_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
         echo "total_requests_bar=$TOTAL_REQUESTS_BAR" >> $GITHUB_OUTPUT
         echo "success_rate_bar=$SUCCESS_RATE_BAR" >> $GITHUB_OUTPUT
+        echo "fastest_response_time_bar=$FASTEST_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
+        echo "slowest_response_time_bar=$SLOWEST_RESPONSE_TIME_BAR" >> $GITHUB_OUTPUT
 
     - name: Comment PR with results
       uses: actions/github-script@v7
@@ -230,6 +259,8 @@ jobs:
           | Metric                  | foo.localhost | bar.localhost |
           |------------------------|---------------|---------------|
           | Average Response Time  | ${{ steps.metrics.outputs.avg_response_time_foo }} | ${{ steps.metrics.outputs.avg_response_time_bar }} |
+          | Slowest Response Time  | ${{ steps.metrics.outputs.slowest_response_time_foo }} | ${{ steps.metrics.outputs.slowest_response_time_bar }} |
+          | Fastest Response Time  | ${{ steps.metrics.outputs.fastest_response_time_foo }} | ${{ steps.metrics.outputs.fastest_response_time_bar }} |
           | P90 Response Time      | ${{ steps.metrics.outputs.p90_response_time_foo }} | ${{ steps.metrics.outputs.p90_response_time_bar }} |
           | P95 Response Time      | ${{ steps.metrics.outputs.p95_response_time_foo }} | ${{ steps.metrics.outputs.p95_response_time_bar }} |
           | Success Rate           | ${{ steps.metrics.outputs.success_rate_foo }} | ${{ steps.metrics.outputs.success_rate_bar }} |
