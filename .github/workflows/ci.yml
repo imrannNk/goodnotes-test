@@ -135,7 +135,8 @@ jobs:
 
         echo "🔍 Ingresses:"
         kubectl get ingress
-        kubectl describe ingress bar-http-echo, foo-http-echo
+        kubectl describe ingress bar-http-echo
+        kubectl describe ingress foo-http-echo
 
         echo "🔍 Events:"
         kubectl get events --sort-by=.metadata.creationTimestamp
