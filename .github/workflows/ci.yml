@@ -134,22 +134,33 @@ jobs:
         kubectl get svc -o wide
 
         echo "🔍 Ingresses:"
-        kubectl describe ingress bar-http-echo
+        kubectl get ingress
+        kubectl describe ingress bar-http-echo, foo-http-echo
 
         echo "🔍 Events:"
         kubectl get events --sort-by=.metadata.creationTimestamp
-
 
     - name: Test Ingress with curl
       run: |
         echo "127.0.0.1 foo.localhost bar.localhost" | sudo tee -a /etc/hosts
 
-        echo "🔍 Curling foo.localhost..."
-        curl -v http://foo.localhost
+        for host in foo.localhost bar.localhost; do
+          echo "⏳ Waiting for $host to become reachable..."
 
-        echo "🔍 Curling bar.localhost..."
-        curl -v http://bar.localhost
+          for i in {1..50}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://$host || true)
+            echo "Attempt $i: HTTP $status"
+            if [[ "$status" == "200" ]]; then
+              echo "$host is reachable."
+              break
+            fi
+            sleep 6
+          done
 
+          # Final attempt to output full response for debugging
+          echo "📦 Curling $host..."
+          curl -v http://$host || echo "Failed to reach $host"
+        done
 
     - name: Install hey for load testing
       run: |
